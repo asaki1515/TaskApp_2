@@ -2,6 +2,7 @@ package jp.techacademy.asaki.minegishi.taskapp_2;
 
 import android.app.AlarmManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
@@ -9,15 +10,19 @@ import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;  // ボタンを押すとキーボードが消えるようにする
 import android.widget.AdapterView;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ListView;
+import android.view.WindowManager.LayoutParams;  // 起動時にEditTextからフォーカスを外すため
 
 import io.realm.Realm;
 import io.realm.RealmChangeListener;
 import io.realm.RealmResults;
 import io.realm.Sort;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity{
     public final static String EXTRA_TASK = "jp.techacademy.taro.kirameki.taskapp.TASK";
 
     private Realm mRealm;
@@ -30,10 +35,13 @@ public class MainActivity extends AppCompatActivity {
     };
     private ListView mListView;
     private TaskAdapter mTaskAdapter;
+    private EditText mEditText;  // カテゴリーを入力するEditTextfd
+    private Button mSearchButton;  // EditTextに入力されたカテゴリーで検索をかけるボタン
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        this.getWindow().setSoftInputMode(LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN); //Activity 起動時にEditTextからフォーカスを外す
         setContentView(R.layout.activity_main);
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
@@ -55,6 +63,13 @@ public class MainActivity extends AppCompatActivity {
         // ListViewの設定
         mTaskAdapter = new TaskAdapter(MainActivity.this);  // MainActivity.thisでレイアウトサービスを取得
         mListView = (ListView) findViewById(R.id.listView1);
+
+        // EditTextの設定
+        mEditText = (EditText) findViewById(R.id.category_edit_text);
+
+        // Buttonの設定
+        mSearchButton = (Button) findViewById(R.id.search_button);
+        mSearchButton.setOnClickListener(mOnSearchClickListener);
 
         // ListViewをタップしたときの処理
         mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -124,6 +139,40 @@ public class MainActivity extends AppCompatActivity {
 
         reloadListView();  // 新しいタスク内容を再描画
     }
+
+    // mSearchButtonを押した時の処理
+    private View.OnClickListener mOnSearchClickListener = new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+
+            // edit_textに入っている文字をタスクのカテゴリーに
+            String category = mEditText.getText().toString();
+
+            // edit_textにカテゴリーが入っていたら
+            if(category.length() != 0) {
+
+                // categoryと同じカテゴリーが入っていたら、一致したtask全てを日付降順で取得
+                RealmResults<Task> CategoryResults = mRealm.where(Task.class).equalTo("category", category).findAllSorted("date", Sort.DESCENDING);
+
+                // 上記の結果を、TaskList としてセットする
+                mTaskAdapter.setTaskList(mRealm.copyFromRealm(CategoryResults));  // TaskAdapterにデータを設定
+
+                // TaskのListView用のアダプタに渡す
+                mListView.setAdapter(mTaskAdapter);  // ListViewにTaskAdapterを設定
+
+                // 表示を更新するために、アダプターにデータが変更されたことを知らせる
+                mTaskAdapter.notifyDataSetChanged();  // データが変わったことを伝えてリストを再描画
+            }else {
+                // edit_textにカテゴリーが入っていなかったら再描画
+                reloadListView();
+            }
+
+            if(v == mSearchButton){ // mSearchButtonを押すと、キーボードを消す（https://groups.google.com/forum/#!topic/android-sdk-japan/5c9ShCX8fJ4）　
+                InputMethodManager inputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                inputMethodManager.hideSoftInputFromWindow(v.getWindowToken(), 0);
+            }
+        }
+    };
 
     private void reloadListView() {// TaskAdapterにデータを設定、ListViewにTaskAdapterを設定、再描画する
 
